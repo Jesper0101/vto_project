@@ -1,236 +1,232 @@
 import os
-import cv2
+import onnx
+import time
 import yaml
-from sklearn.model_selection import train_test_split
+import torch
+import numpy as np
+from pathlib import Path
+from ultralytics import YOLO
 
-class HandDatasetPreprocessor:
-    def __init__(self, config_path='config.yaml', hand_img_dir=None, annotations_dir=None, 
-                 non_hand_dir=None, max_samples=6000, max_negative_samples=500):
+class HandWristDetector:
+    def __init__(self, config_path='config.yaml'):
+        """
+        Initialize HandWristDetector with configuration
+        
+        Args:
+            config_path (str): Path to the configuration YAML file
+        """
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        self.hand_img_dir = hand_img_dir
-        self.annotations_dir = annotations_dir
-        self.non_hand_dir = non_hand_dir
-        self.output_dir = os.path.abspath(self.config['paths']['output_dir'])
-        self.dataset_dir = os.path.join(self.output_dir, 'hand_dataset')
-        self.max_samples = max_samples
-        self.max_negative_samples = max_negative_samples
+        # Initialize YOLO pose detection model
+        model_size = self.config['model']['size']
+        model_path = f"yolov8{model_size}-pose.pt"
         
-        for split in ['train', 'val', 'test']:
-            os.makedirs(os.path.join(self.dataset_dir, split, 'images'), exist_ok=True)
-            os.makedirs(os.path.join(self.dataset_dir, split, 'labels'), exist_ok=True)
-
-    def _get_negative_samples(self):
-        """Gets list of negative sample images."""
-        if not self.non_hand_dir:
-            return []
+        # Download model if not exists
+        if not os.path.exists(model_path):
+            print(f"Downloading YOLOv8{model_size} pose model...")
         
-        negative_samples = []
-        valid_extensions = ('.jpg', '.jpeg', '.png')
+        self.model = YOLO(model_path)
         
-        for file in os.listdir(self.non_hand_dir):
-            if file.lower().endswith(valid_extensions):
-                img_path = os.path.join(self.non_hand_dir, file)
-                try:
-                    # Verify the image can be opened
-                    image = cv2.imread(img_path)
-                    if image is not None:
-                        negative_samples.append({
-                            'image_path': img_path,
-                            'is_negative': True
-                        })
-                except Exception as e:
-                    print(f"Error reading negative sample {file}: {e}")
+    def train(self, data_yaml):
+        """
+        Train the model with custom configuration
         
-        print(f"Found {len(negative_samples)} negative samples.")
-        return negative_samples[:self.max_negative_samples]
-
-    def _get_image_annotation_pairs(self):
-        """Pairs each image with its annotation file."""
-        if not self.hand_img_dir or not self.annotations_dir:
-            raise ValueError("Image and annotations directories must be specified.")
+        Args:
+            data_yaml (str): Path to the data YAML file containing dataset configuration
+            
+        Returns:
+            results: Training results object
+        """
+        # Set training arguments
+        args = dict(
+            data=data_yaml,                    # Path to data YAML file
+            task='pose',                       # Task type for pose detection
+            mode='train',                      # Training mode
+            model=self.model,                  # Model to train
+            epochs=self.config['model']['epochs'],
+            imgsz=self.config['model']['image_size'],
+            batch=self.config['model']['batch_size'],
+            device='',                         # Device to use (auto-select)
+            workers=8,                         # Number of worker threads
+            optimizer='AdamW',                  # Optimizer to use (Adam)
+            patience=20,                       # Early stopping patience
+            verbose=True,                      # Print verbose output
+            seed=0,                           # Random seed
+            deterministic=True,                # Enable deterministic mode
+            single_cls=True,                   # Single class training
+            rect=True,                         # Rectangular training
+            cos_lr=True,                       # Cosine learning rate scheduler
+            close_mosaic=10,                   # Disable mosaic augmentation for final epochs
+            resume=False,                      # Resume training
+            amp=True,                          # Automatic Mixed Precision
+            
+            # Learning rate settings
+            lr0=0.001,                        # Initial learning rate
+            lrf=0.01,                         # Final learning rate fraction
+            momentum=0.937,                    # SGD momentum/Adam beta1
+            weight_decay=0.0005,              # Optimizer weight decay
+            warmup_epochs=3.0,                # Warmup epochs
+            warmup_momentum=0.8,              # Warmup initial momentum
+            warmup_bias_lr=0.1,               # Warmup initial bias learning rate
+            
+            # Loss coefficients
+            box=7.5,                          # Box loss gain
+            cls=0.5,                          # Class loss gain
+            pose=12.0,                        # Pose loss gain
+            kobj=2.0,                         # Keypoint obj loss gain
+            
+            # Augmentation settings
+            degrees=10.0,                      # Rotation degrees
+            translate=0.2,                    # Translation
+            scale=0.7,                        # Scale
+            fliplr=0.5,                       # Horizontal flip probability
+            mosaic=1.0,                       # Mosaic probability
+            mixup=0.0,                        # Mixup probability
+            
+            # Saving settings
+            project='runs/pose',              # Project name
+            name='train',                     # Run name
+            exist_ok=False,                   # Allow existing project
+            pretrained=True,                  # Use pretrained model
+            plots=True,                       # Generate plots
+            save=True,                        # Save train checkpoints
+            save_period=-1,                   # Save checkpoint every x epochs
+            
+            # Validation settings
+            val=True,                         # Validate during training
+            save_json=False,                  # Save JSON validation results
+            conf=None,                        # Confidence threshold
+            iou=0.7,                          # NMS IoU threshold
+            max_det=300,                      # Maximum detections per image
+            
+            # Advanced settings
+            fraction=1.0,                     # Dataset fraction to train on
+            profile=False,                    # Profile ONNX/TF.js/TensorRT
+            overlap_mask=True,                # Masks should overlap during inference
+            mask_ratio=4,                     # Mask downsample ratio
+            dropout=0.2,                      # Use dropout regularization
+            label_smoothing=0.1,              # Label smoothing epsilon
+            nbs=64,                          # Nominal batch size
+        )
         
-        pairs = []
-        for file in os.listdir(self.hand_img_dir):
-            if file.endswith('.jpg') or file.endswith('.png'):
-                img_path = os.path.join(self.hand_img_dir, file)
-                annotation_name = os.path.splitext(file)[0] + '.txt'
-                annotation_path = os.path.join(self.annotations_dir, annotation_name)
-                
-                if os.path.exists(annotation_path):
-                    pairs.append((img_path, annotation_path))
-                else:
-                    print(f"Warning: No annotation found for {file}")
-        
-        print(f"Found {len(pairs)} positive image-annotation pairs.")
-        return pairs[:self.max_samples]
-
-    def _validate_keypoints(self, line):
-        """Validates the simplified keypoint format (8 values)."""
+        # Start training
         try:
-            parts = line.strip().split()
+            results = self.model.train(**args)
+            return results
+        except Exception as e:
+            print(f"Training error: {str(e)}")
+            raise
+    
+    def evaluate(self, data_yaml):
+        """
+        Evaluate the model on validation/test set
+        
+        Args:
+            data_yaml (str): Path to the data YAML file
             
-            # Check if we have exactly 8 values
-            if len(parts) != 8:
-                print(f"Invalid number of values in line. Expected 8, got {len(parts)}")
-                return None
+        Returns:
+            results: Validation results object
+        """
+        try:
+            results = self.model.val(
+                data=data_yaml,
+                imgsz=self.config['model']['image_size'],
+                batch=self.config['model']['batch_size'],
+                conf=0.25,
+                iou=0.7,
+                device='',
+                verbose=True,
+                save_json=False,
+                save_hybrid=False,
+                max_det=300,
+                half=False
+            )
+            return results
+        except Exception as e:
+            print(f"Evaluation error: {str(e)}")
+            raise
+    
+    def export_model(self, format='onnx'):
+        """
+        Export the model to specified format
+        
+        Args:
+            format (str): Format to export to ('onnx' or 'tflite')
+        """
+        try:
+            if format == 'onnx':
+                self.model.export(
+                    format='onnx',
+                    dynamic=True,
+                    simplify=True,
+                    opset=11,
+                    device='cpu'
+                )
+            elif format == 'tflite':
+                self.model.export(
+                    format='tflite',
+                    int8=True,
+                    device='cpu'
+                )
+        except Exception as e:
+            print(f"Export error: {str(e)}")
+            raise
+    
+    def predict(self, image_path):
+        """
+        Run inference on a single image
+        
+        Args:
+            image_path (str): Path to the input image
             
-            # Parse values
-            class_id = int(parts[0])
-            bbox = [float(x) for x in parts[1:5]]
-            keypoint = [float(x) for x in parts[5:8]]
+        Returns:
+            results: Detection results object
+        """
+        try:
+            results = self.model.predict(
+                source=image_path,
+                conf=0.25,
+                iou=0.45,
+                imgsz=self.config['model']['image_size'],
+                device='',
+                verbose=False,
+                save=True,
+                save_txt=False,
+                save_conf=False,
+                save_crop=False,
+                show_labels=True,
+                show_conf=True,
+                max_det=300,
+                agnostic_nms=False,
+                classes=None,
+                retina_masks=False,
+                boxes=True
+            )
+            return results[0]
+        except Exception as e:
+            print(f"Prediction error: {str(e)}")
+            raise
+    
+    def predict_batch(self, image_paths):
+        """
+        Run inference on a batch of images
+        
+        Args:
+            image_paths (list): List of paths to input images
             
-            # Validate class ID
-            if class_id != 0:
-                print(f"Invalid class ID: {class_id}")
-                return None
-                
-            # Validate bbox values are between 0 and 1
-            if not all(0 <= x <= 1 for x in bbox):
-                print(f"Invalid bbox values (must be between 0 and 1): {bbox}")
-                return None
-            
-            # Validate keypoint x,y values are between 0 and 1
-            if not all(0 <= x <= 1 for x in keypoint[:2]):
-                print(f"Invalid keypoint coordinates (must be between 0 and 1): {keypoint[:2]}")
-                return None
-            
-            return line.strip()
-            
-        except (ValueError, IndexError) as e:
-            print(f"Error processing keypoint line: {e}")
-            return None
-
-    def _prepare_samples(self):
-        """Prepares samples with validated keypoint annotations and negative samples."""
-        print("Preparing samples...")
-        pairs = self._get_image_annotation_pairs()
-        negative_samples = self._get_negative_samples()
-        samples = []
-        invalid_count = 0
-        
-        # Process positive samples
-        for img_path, ann_path in pairs:
-            try:
-                image = cv2.imread(img_path)
-                if image is None:
-                    print(f"Failed to read image: {img_path}")
-                    continue
-                
-                with open(ann_path, 'r') as f:
-                    lines = f.readlines()
-                
-                valid_annotations = []
-                for line in lines:
-                    formatted_line = self._validate_keypoints(line)
-                    if formatted_line:
-                        valid_annotations.append(formatted_line)
-                    else:
-                        invalid_count += 1
-                
-                if valid_annotations:
-                    samples.append({
-                        'image_path': img_path,
-                        'yolo_format': valid_annotations,
-                        'is_negative': False
-                    })
-                else:
-                    print(f"No valid annotations found in {ann_path}")
-            
-            except Exception as e:
-                print(f"Error processing {img_path}: {e}")
-                continue
-        
-        # Add negative samples
-        samples.extend(negative_samples)
-        
-        print(f"Processed total {len(samples)} samples:")
-        print(f"- Valid positive samples: {len(samples) - len(negative_samples)}")
-        print(f"- Negative samples: {len(negative_samples)}")
-        print(f"- Invalid annotations: {invalid_count}")
-        
-        return samples
-
-    def prepare_dataset(self):
-        """Splits the dataset into train, val, and test sets."""
-        all_samples = self._prepare_samples()
-        
-        if not all_samples:
-            raise ValueError("No valid samples found in the dataset.")
-        
-        train_ratio = self.config['training']['train_ratio']
-        val_ratio = self.config['training']['val_ratio']
-        
-        train_data, temp = train_test_split(all_samples, train_size=train_ratio, 
-                                          stratify=[s['is_negative'] for s in all_samples])
-        val_data, test_data = train_test_split(temp, train_size=val_ratio/(1-train_ratio),
-                                             stratify=[s['is_negative'] for s in temp])
-        
-        return train_data, val_data, test_data
-
-    def prepare_yolo_dataset(self):
-        """Prepares the dataset in YOLO format."""
-        train_data, val_data, test_data = self.prepare_dataset()
-        splits = {'train': train_data, 'val': val_data, 'test': test_data}
-        
-        total_processed = 0
-        total_negative = 0
-        
-        for split_name, split_data in splits.items():
-            print(f"\nProcessing {split_name} split: {len(split_data)} samples")
-            
-            for idx, sample in enumerate(split_data):
-                try:
-                    # Copy and rename image
-                    src_path = sample['image_path']
-                    dst_name = f"{idx:06d}.jpg"
-                    dst_path = os.path.join(self.dataset_dir, split_name, 'images', dst_name)
-                    
-                    image = cv2.imread(src_path)
-                    if image is None:
-                        print(f"Failed to read image: {src_path}")
-                        continue
-                    
-                    cv2.imwrite(dst_path, image)
-                    
-                    # Save annotations (empty file for negative samples)
-                    label_path = os.path.join(self.dataset_dir, split_name, 'labels', f"{idx:06d}.txt")
-                    if sample['is_negative']:
-                        # Create empty label file for negative sample
-                        open(label_path, 'w').close()
-                        total_negative += 1
-                    else:
-                        # Write annotations for positive sample
-                        with open(label_path, 'w') as f:
-                            for line in sample['yolo_format']:
-                                f.write(line + '\n')
-                    
-                    total_processed += 1
-                    
-                except Exception as e:
-                    print(f"Error processing {src_path}: {e}")
-                    continue
-        
-        print(f"\nTotal processed samples: {total_processed}")
-        print(f"- Positive samples: {total_processed - total_negative}")
-        print(f"- Negative samples: {total_negative}")
-        
-        # Create data.yaml
-        data_yaml = {
-            'path': self.dataset_dir,
-            'train': os.path.join('train', 'images'),
-            'val': os.path.join('val', 'images'),
-            'test': os.path.join('test', 'images'),
-            'nc': 1,
-            'names': ['hand'],
-            'kpt_shape': [1, 3],  # [number of keypoints, dimensions per keypoint]
-            'task': 'pose'
-        }
-        
-        yaml_path = os.path.join(self.dataset_dir, 'data.yaml')
-        with open(yaml_path, 'w') as f:
-            yaml.dump(data_yaml, f, default_flow_style=False)
-        
-        print(f"\nDataset configuration saved to: {yaml_path}")
-        return yaml_path
+        Returns:
+            results: List of detection results objects
+        """
+        try:
+            results = self.model.predict(
+                source=image_paths,
+                conf=0.25,
+                iou=0.45,
+                imgsz=self.config['model']['image_size'],
+                batch=self.config['model']['batch_size']
+            )
+            return results
+        except Exception as e:
+            print(f"Batch prediction error: {str(e)}")
+            raise
