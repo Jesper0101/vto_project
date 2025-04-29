@@ -119,7 +119,7 @@ vto_project/
 ├── best.pt                  # Pre-trained model weights
 ├── hand_wrist_detector.py   # Main detection class
 └── webcam_detector.py       # Webcam implementation
-```
+```bash
 
 > **Note:** This repository contains only the deployment code and model files. The training code and dataset processing scripts are proprietary and not included as they are part of a commercial project.
 ```
