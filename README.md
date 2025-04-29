@@ -32,7 +32,7 @@ This repository contains the deployment code and pre-trained model. The training
 1. Clone the repository:
 ```bash
 git clone https://github.com/Jesper0101/vto_project.git
-cd vto-project
+cd vto_project
 ```
 
 2. Install dependencies:
