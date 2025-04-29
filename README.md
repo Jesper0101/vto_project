@@ -113,6 +113,7 @@ This will open your webcam and start detecting hands and wrist keypoints in real
 ```
 vto_project/
 ├── README.md                # Project documentation
+├── requirements.txt         # Requirements
 ├── config.yaml              # Configuration file
 ├── data.yaml                # Dataset configuration
 ├── best.pt                  # Pre-trained model weights
