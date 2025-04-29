@@ -1,9 +1,8 @@
 paths: 
-  hand_img_dir: "C:/Users/dogsh/Documents/Work/MachineLearning/Hand_wrist_keypoint/train/images"
-  non_hand_dir: "C:/Users/dogsh/Documents/Work/MachineLearning/Hand_wrist_keypoint/non-hands"        # Directory containing non-hand images
-  annotations_dir: "C:/Users/dogsh/Documents/Work/MachineLearning/Hand_wrist_keypoint/train/labels"
-  output_dir: "C:/Users/dogsh/Documents/Work/MachineLearning/Hand_wrist_keypoint"
-
+  hand_img_dir: "./datasets/hand_wrist/train/images"
+  non_hand_dir: "./datasets/hand_wrist/non-hands"        
+  annotations_dir: "./datasets/hand_wrist/train/labels"
+  output_dir: "./output"
 
 model:
   size: "n"  # Options: n (nano), s (small), m (medium), l (large), x (xlarge)
