@@ -1,10 +1,12 @@
 # Hand-Wrist Detection for Virtual Try-On (VTO)
 
-A computer vision system that detects hands and wrist keypoint for virtual try-on applications such as watches, bracelets, and other wearables.
+A computer vision system that detects hands and wrist keypoints for virtual try-on applications such as watches, bracelets, and other wearables.
+
+![Hand-Wrist Detection Demo](https://github.com/yourusername/vto-project/raw/main/demo/demo.gif)
 
 ## Overview
 
-This project uses YOLOv8 pose detection models fine-tuned on a custom dataset to accurately detect hands and wrist keypoints. It enables precise virtual placement of products on users' wrists through a webcam.
+This project uses YOLOv8 pose detection models fine-tuned on a custom dataset to accurately detect hands and wrist keypoints. It enables precise virtual placement of products on users' wrists through a webcam, creating an interactive virtual try-on experience for accessories.
 
 ### Key Features
 
@@ -27,8 +29,8 @@ This project uses YOLOv8 pose detection models fine-tuned on a custom dataset to
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/vto_project.git
-cd vto_project
+git clone https://github.com/yourusername/vto-project.git
+cd vto-project
 ```
 
 2. Install dependencies:
@@ -46,24 +48,35 @@ pip install -r requirements.txt
 
 The project uses two YAML files for configuration:
 
+> **Note:** When using this repository, make sure to update the paths in `config.yaml` to match your local directory structure. The example below uses relative paths which are recommended for portability.
+
+### `config.yaml`
+
+This file contains the main configuration parameters for the model and training process:
+
 ### `config.yaml`
 
 This file contains the main configuration parameters for the model and detection system:
 
 ```yaml
-model:
-  size: "n"  # YOLOv8 model size: n, s, m, l, x
-  image_size: 640
-  batch_size: 16
-  epochs: 100
-
 paths:
+  hand_img_dir: "./datasets/hand_wrist/train/images"
+  non_hand_dir: "./datasets/hand_wrist/non-hands"        
+  annotations_dir: "./datasets/hand_wrist/train/labels"
   output_dir: "./output"
-  data_yaml: "./data.yaml"
-  
-detection:
-  confidence_threshold: 0.25
-  iou_threshold: 0.45
+model:
+  size: "n"  # Options: n (nano), s (small), m (medium), l (large), x (xlarge)
+  epochs: 50  # Number of training epochs
+  image_size: 224  # Input image size
+  batch_size: 16  # Batch size for training
+  pretrained: true  # Use pretrained weights
+  conf_thres: 0.25  # Confidence threshold for detection
+  iou_thres: 0.45  # IoU threshold for NMS
+  device: ""  # Device selection (empty string for auto-selection)
+training:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  seed: 42
 ```
 
 ### `data.yaml`
@@ -71,18 +84,19 @@ detection:
 This file defines the dataset structure for training and validation:
 
 ```yaml
-path: ./datasets/hand_wrist
-train: images/train
-val: images/val
-test: images/test
-
-nc: 1  # Number of classes
-names: ['hand']  # Class names
-
-keypoints:
-  num: 1  # Number of keypoints
-  flip_idx: [0]  # No flip index needed for single wrist point
-  names: ['wrist']  # Keypoint names
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+kpt_shape: [1, 3]
+flip_idx: [0]
+nc: 1
+names: ['hand']
+roboflow:
+  workspace: hand-isb9j
+  project: hand-bmhpi
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/hand-isb9j/hand-bmhpi/dataset/2
 ```
 
 ## Usage
@@ -100,13 +114,13 @@ This will open your webcam and start detecting hands and wrist keypoints in real
 If you want to train the model on your own dataset:
 
 ```bash
-python train.py --config_path config.yaml --data_yaml data.yaml
+python train.py --config config.yaml
 ```
 
 ### Evaluating the model
 
 ```bash
-python evaluate.py --weights output/runs/pose/train/weights/best.pt --data_yaml data.yaml
+python evaluate.py --weights output/runs/pose/train/weights/best.pt
 ```
 
 ### Exporting the model
@@ -145,17 +159,22 @@ vto-project/
 
 The hand-wrist detection model is trained using YOLOv8's pose estimation capabilities with the following approach:
 
-1. **Base Model**: YOLOv8 pose model pre-trained on COCO keypoints
-2. **Fine-tuning**: Custom training for hand detection with wrist keypoint
-3. **Optimization**: Hyperparameter tuning for optimal detection accuracy
-4. **Augmentation**: Data augmentation techniques to improve robustness
+1. **Base Model**: YOLOv8-nano pose model pre-trained on COCO keypoints
+2. **Custom Dataset**: Created from Roboflow's hand detection dataset with custom wrist keypoint annotations
+3. **Fine-tuning**: Model trained for 50 epochs with optimized hyperparameters
+4. **Data Augmentation**: Rotation, scaling, and flipping to improve model robustness
+5. **Keypoint Configuration**: Single keypoint (wrist) with [1,3] shape and appropriate flip indexes
+
+The model is specifically designed to accurately locate the wrist position, which is crucial for realistic placement of virtual accessories in the VTO application.
 
 ## Performance
 
 The model achieves:
 - **FPS**: 20-30 FPS on CPU, 60+ FPS on GPU
-- **mAP50**: 0.92 (hand detection)
-- **OKS**: 0.87 (wrist keypoint accuracy)
+- **Hand detection accuracy**: 0.92 mAP50
+- **Wrist keypoint precision**: 0.87 OKS
+
+The model is optimized for real-time detection with a small footprint, making it suitable for deployment in web applications and on devices with limited computational resources.
 
 ## License
 
