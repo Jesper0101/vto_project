@@ -27,8 +27,8 @@ This project uses YOLOv8 pose detection models fine-tuned on a custom dataset to
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/vto-project.git
-cd vto-project
+git clone https://github.com/yourusername/vto_project.git
+cd vto_project
 ```
 
 2. Install dependencies:
