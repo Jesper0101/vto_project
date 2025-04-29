@@ -2,11 +2,13 @@
 
 A computer vision system that detects hands and wrist keypoints for virtual try-on applications such as watches, bracelets, and other wearables.
 
-![Hand-Wrist Detection Demo](https://github.com/yourusername/vto-project/raw/main/demo/demo.gif)
+![Hand-Wrist Detection Demo](https://github.com/Jesper0101/vto_project/raw/main/demo/demo.gif)
 
 ## Overview
 
-This project uses YOLOv8 pose detection models fine-tuned on a custom dataset to accurately detect hands and wrist keypoints. It enables precise virtual placement of products on users' wrists through a webcam, creating an interactive virtual try-on experience for accessories.
+This project demonstrates a Virtual Try-On (VTO) system that uses YOLOv8 pose detection models to accurately identify hands and wrist keypoints. It enables precise virtual placement of products on users' wrists through a webcam, creating an interactive virtual try-on experience for accessories.
+
+This repository contains the deployment code and pre-trained model. The training code is proprietary and not included as this is part of a commercial project.
 
 ### Key Features
 
@@ -30,19 +32,17 @@ This project uses YOLOv8 pose detection models fine-tuned on a custom dataset to
 1. Clone the repository:
 ```bash
 git clone https://github.com/Jesper0101/vto_project.git
-cd vto_project
+cd vto-project
 ```
 
 2. Install dependencies:
 ```bash
 pip install -r requirements.txt
+# Or install dependencies manually:
+pip install torch opencv-python ultralytics numpy pyyaml
 ```
 
-3. Download the pre-trained model:
-```bash
-# The model will be downloaded automatically when running the code for the first time
-# Or you can manually download it from the repository's releases page
-```
+3. The pre-trained model (`best.pt`) is included in the repository.
 
 ## Configuration
 
@@ -50,10 +50,10 @@ The project uses two YAML files for configuration:
 
 > **Note:** When using this repository, make sure to update the paths in `config.yaml` to match your local directory structure. The example below uses relative paths which are recommended for portability.
 
+
 ### `config.yaml`
 
-This file contains the main configuration parameters for the model and training process:
-
+This file contains the main configuration parameters for the model, training and detection system:
 
 ```yaml
 paths:
@@ -106,50 +106,21 @@ python webcam_detector.py
 
 This will open your webcam and start detecting hands and wrist keypoints in real-time. Press 'q' to quit.
 
-### Training a custom model
-
-If you want to train the model on your own dataset:
-
-```bash
-python train.py --config config.yaml
-```
-
-### Evaluating the model
-
-```bash
-python evaluate.py --weights output/runs/pose/train/weights/best.pt
-```
-
-### Exporting the model
-
-```bash
-python export.py --weights output/runs/pose/train/weights/best.pt --format onnx
-```
+> **Note:** The training and evaluation scripts are not included in this repository as they contain proprietary code.
 
 ## Project Structure
 
 ```
 vto-project/
-├── config.yaml              # Main configuration file
+├── README.md                # Project documentation
+├── config.yaml              # Configuration file
 ├── data.yaml                # Dataset configuration
+├── best.pt                  # Pre-trained model weights
 ├── hand_wrist_detector.py   # Main detection class
-├── webcam_detector.py       # Webcam implementation
-├── train.py                 # Training script
-├── evaluate.py              # Evaluation script
-├── export.py                # Model export utilities
-├── datasets/                # Dataset directory
-│   └── hand_wrist/          # Hand-wrist dataset
-│       ├── images/          # Image files
-│       │   ├── train/       # Training images
-│       │   ├── val/         # Validation images
-│       │   └── test/        # Test images
-│       └── labels/          # Label files
-├── output/                  # Output directory
-│   └── runs/                # Training runs
-│       └── pose/            # Pose detection results
-│           └── train/       # Training results
-│               └── weights/ # Trained model weights
-└── demo/                    # Demo materials
+└── webcam_detector.py       # Webcam implementation
+```
+
+> **Note:** This repository contains only the deployment code and model files. The training code and dataset processing scripts are proprietary and not included as they are part of a commercial project.
 ```
 
 ## Model Training Details
