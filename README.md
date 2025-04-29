@@ -153,3 +153,4 @@ The model is optimized for real-time detection with a small footprint, making it
 
 - This project uses [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) for object detection and pose estimation
 - Thanks to [OpenCV](https://opencv.org/) for computer vision utilities
+- [PyTorch](https://pytorch.org/) for deep learning infrastructure.
