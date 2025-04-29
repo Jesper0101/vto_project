@@ -54,9 +54,6 @@ The project uses two YAML files for configuration:
 
 This file contains the main configuration parameters for the model and training process:
 
-### `config.yaml`
-
-This file contains the main configuration parameters for the model and detection system:
 
 ```yaml
 paths:
